@@ -6,21 +6,26 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 public class ClipboardController {
     Map<String, Clipboard> clips = new ConcurrentHashMap<>();
     Map<String, DeferredResult<Clipboard>> waitlist = new ConcurrentHashMap<>();
 
-    //长轮询，如果是HOOK Ctrl+V再去获取的话，可能会有延时，体验很差
+    /**长轮询，如果是HOOK Ctrl+V再去获取的话，可能会有延时，体验很差<br>
+     * 若服务端掉线，HTTP会自动重连，重新进入这个方法，重新注册一次，所以不用担心push失败
+     */
     @GetMapping("/clipboard/long-polling/{id}/{os}") //for Windows
     public DeferredResult<Clipboard> clipboard_long_polling(@PathVariable String id, @PathVariable String os) {
-        DeferredResult<Clipboard> deferResult = new DeferredResult<>(30_000L); //30s
-        deferResult.onTimeout(() -> { //超时从waitlist中移除
+        DeferredResult<Clipboard> deferResult = new DeferredResult<>(60_000L); //60s
+        // 包含所有完成状态（正常、超时、异常），集中处理
+        // 这对于检测 DeferredResult 实例不再可用非常有用
+        deferResult.onCompletion(() -> { // 完成后从waitlist中移除
             if (waitlist.containsKey(id) && waitlist.get(id).equals(deferResult)) { //确认存储的是该对象
-                waitlist.remove(id).setErrorResult("Just Timeout"); //不设置会WARN报错，设置了就好了hhh
-//                System.out.println("Timeout, remove " + id);
+                waitlist.remove(id);
+                // 超时后若setErrorResult，则不会抛出异常，但是会返回状态码200，不符合预期
+                // 故不设置errorResult，而是在全局异常处理中捕获AsyncRequestTimeoutException，返回状态码304
             }
         });
 
@@ -30,7 +35,7 @@ public class ClipboardController {
             deferResult.setResult(clips.remove(id));
         } else {
             if (waitlist.containsKey(id)) {
-                waitlist.remove(id).setErrorResult("肿么会同时发起多个长轮询！！");
+                waitlist.get(id).setErrorResult("肿么会同时发起多个长轮询！！"); // OnComplete中统一移除
             }
             waitlist.put(id, deferResult);
         }
@@ -52,7 +57,7 @@ public class ClipboardController {
         clipboard.setOs(os);
         //目前仅支持单Windows + 单IOS，后续可以加入设备ID区分不同Windows
         if (waitlist.containsKey(id) && os.equals("ios")) { //仅IOS向Windows推送， IOS仅快捷指令手动Get
-            waitlist.remove(id).setResult(clipboard);
+            waitlist.get(id).setResult(clipboard); //通知长轮询
             System.out.println("Push to " + id);
         } else
             this.clips.put(id, clipboard);
