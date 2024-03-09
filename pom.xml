@@ -52,6 +52,14 @@
                     <source>17</source>
                     <target>17</target>
                     <encoding>UTF-8</encoding>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                        <!--防止警告：Using deprecated '-debug' fallback for parameter name resolution.
+                        Compile the affected code with '-parameters' instead or avoid its introspection:
+                        com.mrbeanc.controller.ClipboardController
+                        记得clean & 重新编译
+                        -->
+                    </compilerArgs>
                 </configuration>
             </plugin>
             <plugin>

@@ -35,7 +35,7 @@ public class ClipboardController {
             deferResult.setResult(clips.remove(id));
         } else {
             if (waitlist.containsKey(id)) {
-                waitlist.get(id).setErrorResult("肿么会同时发起多个长轮询！！"); // OnComplete中统一移除
+                waitlist.get(id).setErrorResult("肿么会同时发起多个长轮询！！不过有可能是客户端掉线重连maybe"); // OnComplete中统一移除
             }
             waitlist.put(id, deferResult);
         }
