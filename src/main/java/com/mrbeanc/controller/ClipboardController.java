@@ -1,6 +1,7 @@
 package com.mrbeanc.controller;
 
 import com.mrbeanc.model.Clipboard;
+import com.mrbeanc.util.Utils;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
@@ -14,7 +15,9 @@ public class ClipboardController {
     Map<String, DeferredResult<Clipboard>> waitlist = new ConcurrentHashMap<>();
 
     /**长轮询，如果是HOOK Ctrl+V再去获取的话，可能会有延时，体验很差<br>
-     * 若服务端掉线，HTTP会自动重连，重新进入这个方法，重新注册一次，所以不用担心push失败
+     * 若服务端异常掉线重启，客户端应超时重连，重新进入这个方法，重新注册一次，所以不用担心push失败 <br>
+     * 如果配置了Nginx反向代理，需要配置`proxy_read_timeout`大于长轮询超时时间，否则会返回504 <br>
+     * 这个read指的Nginx是向upstream（也就是后端服务器）读取数据的超时时间 <br>
      */
     @GetMapping("/clipboard/long-polling/{id}/{os}") //for Windows
     public DeferredResult<Clipboard> clipboard_long_polling(@PathVariable String id, @PathVariable String os) {
@@ -35,7 +38,12 @@ public class ClipboardController {
             deferResult.setResult(clips.remove(id));
         } else {
             if (waitlist.containsKey(id)) {
-                waitlist.get(id).setErrorResult("肿么会同时发起多个长轮询！！不过有可能是客户端掉线重连maybe"); // OnComplete中统一移除
+                waitlist.get(id).setErrorResult("肿么会同时发起多个长轮询！！不过有可能是客户端掉线or超时重连maybe"); // OnComplete中统一移除
+                System.out.println("长江后浪推前浪！！");
+                // 有可能是服务端重启，客户端单个long-polling自动重连，重新进入这个方法
+                // 但是，从客户端来看是一个请求之内，继续计时，超时时间为90s
+                // 从服务端来看，是从0开始计时，还没到60s，客户端就超过90s了，导致客户端主动abort，服务端不知道，继续等在waitlist中
+                // 此时客户端又发起请求，导致double long-polling
             }
             waitlist.put(id, deferResult);
         }
@@ -61,6 +69,6 @@ public class ClipboardController {
             System.out.println("Push to " + id);
         } else
             this.clips.put(id, clipboard);
-        System.out.println(id + " : " + clipboard);
+        System.out.println(Utils.omitSHA256(id) + ": " + clipboard);
     }
 }
