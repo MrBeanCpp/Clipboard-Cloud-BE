@@ -79,6 +79,7 @@ public class ClipboardController {
     public Object clipboardStatus() {
         Map<String, Object> res = new HashMap<>();
         res.put("size", clips.size());
+        res.put("polling", waitlist.size()); //users
         return res;
     }
 }
