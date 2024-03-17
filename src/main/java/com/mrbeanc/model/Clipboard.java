@@ -10,7 +10,7 @@ public class Clipboard {
     private String os = "";
     private String data = "";
     private Boolean isText = true;
-    private Long time = Instant.now().getEpochSecond();
+    private Instant time = Instant.now();
 
     @Override
     public String toString() {

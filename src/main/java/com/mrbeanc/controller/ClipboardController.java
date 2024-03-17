@@ -2,17 +2,20 @@ package com.mrbeanc.controller;
 
 import com.mrbeanc.model.Clipboard;
 import com.mrbeanc.util.Utils;
+import jakarta.annotation.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 public class ClipboardController {
-    Map<String, Clipboard> clips = new ConcurrentHashMap<>();
-    Map<String, DeferredResult<Clipboard>> waitlist = new ConcurrentHashMap<>();
+    @Resource(name = "clipboards")
+    private Map<String, Clipboard> clips;
+    private final Map<String, DeferredResult<Clipboard>> waitlist = new ConcurrentHashMap<>();
 
     /**长轮询，如果是HOOK Ctrl+V再去获取的话，可能会有延时，体验很差<br>
      * 若服务端异常掉线重启，客户端应超时重连，重新进入这个方法，重新注册一次，所以不用担心push失败 <br>
@@ -70,5 +73,12 @@ public class ClipboardController {
         } else
             this.clips.put(id, clipboard);
         System.out.println(Utils.omitSHA256(id) + ": " + clipboard);
+    }
+
+    @GetMapping("/clipboard/status")
+    public Object clipboardStatus() {
+        Map<String, Object> res = new HashMap<>();
+        res.put("size", clips.size());
+        return res;
     }
 }
