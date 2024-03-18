@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -26,9 +27,9 @@ public class ScheduledTask {
     }
 
     /** 每隔一段时间，清理过期的剪切板（保护隐私 & 减轻内存压力） */
-    @Scheduled(fixedRateString = "${clipboard.clean.minutes}", initialDelay = 1, timeUnit = TimeUnit.MINUTES)
+    @Scheduled(fixedDelayString = "${clipboard.clean.minutes}", initialDelay = 1, timeUnit = TimeUnit.MINUTES)
     public void clipboardClean() {
-        System.out.println("#ScheduledTask.Clean");
+        System.out.println("#ScheduledTask.Clean " + LocalTime.now());
         int lastSize = clipboards.size();
 
         // Remove clipboards that are older than 10 minutes

@@ -1,5 +1,9 @@
 package com.mrbeanc.util;
 
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+
 public final class Utils  {
     private Utils() {}
     /**
@@ -22,5 +26,12 @@ public final class Utils  {
         } else {
             return str.substring(0, len) + "...";
         }
+    }
+
+    /**
+     * Convert Instant to LocalTime in system default time zone
+     */
+    static public LocalTime toLocalTime(Instant instant) {
+        return instant.atZone(ZoneId.systemDefault()).toLocalTime();
     }
 }

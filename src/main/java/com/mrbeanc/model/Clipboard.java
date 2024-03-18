@@ -22,7 +22,7 @@ public class Clipboard {
                 "os='" + os + '\'' +
                 ", data='" + _data + '\'' +
                 ", isText=" + isText +
-                ", time=" + time +
+                ", time=" + Utils.toLocalTime(time) +
                 '}';
     }
 }
