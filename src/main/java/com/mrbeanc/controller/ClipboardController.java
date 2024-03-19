@@ -10,6 +10,7 @@ import org.springframework.web.context.request.async.DeferredResult;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 public class ClipboardController {
@@ -28,38 +29,60 @@ public class ClipboardController {
         // 包含所有完成状态（正常、超时、异常），集中处理
         // 这对于检测 DeferredResult 实例不再可用非常有用
         deferResult.onCompletion(() -> { // 完成后从waitlist中移除
-            if (waitlist.containsKey(id) && waitlist.get(id).equals(deferResult)) { //确认存储的是该对象
-                waitlist.remove(id);
-                // 超时后若setErrorResult，则不会抛出异常，但是会返回状态码200，不符合预期
-                // 故不设置errorResult，而是在全局异常处理中捕获AsyncRequestTimeoutException，返回状态码304
-            }
+            /* 若id存在，且是该对象，则remove
+             * 相较于手动check-then-act，该函数可以确保线程安全，防止并发修改
+             * better than:
+             * if (map.containsKey(key) && Objects.equals(map.get(key), value))
+             *     map.remove(key);
+             */
+            waitlist.remove(id, deferResult);
+            // 超时后若setErrorResult，则不会抛出异常，但是会返回状态码200，不符合预期
+            // 故不设置errorResult，而是在全局异常处理中捕获AsyncRequestTimeoutException，返回状态码304
         });
 
         //如果不消费(remove)数据，就无法判断是否新数据，推送可能重复或失败（轮询间隔时更新）
         //因此目前只支持 单生产者 单消费者（符合日常使用）
-        if (clips.containsKey(id) && !clips.get(id).getOs().equals(os)) { //不能消费自己推送的数据
-            deferResult.setResult(clips.remove(id));
-        } else {
-            if (waitlist.containsKey(id)) {
-                waitlist.get(id).setErrorResult("肿么会同时发起多个长轮询！！不过有可能是客户端掉线or超时重连maybe"); // OnComplete中统一移除
-                System.out.println("长江后浪推前浪！！");
-                // 有可能是服务端重启，客户端单个long-polling自动重连，重新进入这个方法
-                // 但是，从客户端来看是一个请求之内，继续计时，超时时间为90s
-                // 从服务端来看，是从0开始计时，还没到60s，客户端就超过90s了，导致客户端主动abort，服务端不知道，继续等在waitlist中
-                // 此时客户端又发起请求，导致double long-polling
+        AtomicBoolean hasData = new AtomicBoolean(false);
+        clips.computeIfPresent(id, (k, v) -> {
+            if (!v.getOs().equals(os)) { // 不能消费自己推送的数据
+                deferResult.setResult(v); // 直接响应数据
+                hasData.set(true);
+                return null; // null to `remove` k-v mapping，消费并移除数据
             }
-            waitlist.put(id, deferResult);
+            return v;
+        });
+
+        if (!hasData.get()) {
+            waitlist.compute(id, (k, v) -> {
+                if (v != null) {
+                    v.setErrorResult("肿么会同时发起多个长轮询！！不过有可能是客户端掉线or超时重连maybe");
+                    System.out.println("长江后浪推前浪！！");
+                    // 有可能是服务端重启，客户端单个long-polling自动重连，重新进入这个方法
+                    // 但是，从客户端来看是一个请求之内，继续计时，超时时间为90s
+                    // 从服务端来看，是从0开始计时，还没到60s，客户端就超过90s了，导致客户端主动abort，服务端不知道，继续等在waitlist中
+                    // 此时客户端又发起请求，导致double long-polling
+                }
+                return deferResult; // 保存到waitlist
+            });
         }
+
         return deferResult;
     }
 
     @GetMapping("/clipboard/{id}/{os}") // for IOS
     public Clipboard clipboard(@PathVariable String id, @PathVariable String os) {
-        if (clips.containsKey(id) && !clips.get(id).getOs().equals(os)) { //不能消费自己推送的数据
-            return clips.remove(id);
-        } else {
-            return new Clipboard();
-        }
+        final Clipboard[] clipboard = { null }; // final for lambda
+
+        // get & remove if OK
+        clips.compute(id, (k, v) -> {
+            if (v != null && !v.getOs().equals(os)) { //不能消费自己推送的数据
+                clipboard[0] = v; // save to return
+                return null; // null to remove k-v mapping
+            }
+            return v;
+        });
+
+        return clipboard[0] == null ? new Clipboard() : clipboard[0];
     }
 
     @PostMapping("/clipboard/{id}/{os}")
@@ -67,11 +90,20 @@ public class ClipboardController {
     public void copyToCloud(@PathVariable String id, @PathVariable String os, @RequestBody Clipboard clipboard) {
         clipboard.setOs(os);
         //目前仅支持单Windows + 单IOS，后续可以加入设备ID区分不同Windows
-        if (waitlist.containsKey(id) && os.equals("ios")) { //仅IOS向Windows推送， IOS仅快捷指令手动Get
-            waitlist.get(id).setResult(clipboard); //通知长轮询
-            System.out.println("Push to " + id);
-        } else
-            this.clips.put(id, clipboard);
+
+        AtomicBoolean isPushed = new AtomicBoolean(false);
+        waitlist.computeIfPresent(id, (k, v) -> {
+            if (os.equals("ios")) { //仅IOS向Windows推送， IOS仅快捷指令手动Get
+                v.setResult(clipboard); //通知长轮询
+                isPushed.set(true);
+                System.out.println("Pushed to " + id);
+            }
+            return v;
+        });
+
+        if (!isPushed.get())
+            this.clips.put(id, clipboard); //仅当没有推送时，才保存到clipboards
+
         System.out.println(Utils.omitSHA256(id) + ": " + clipboard);
     }
 

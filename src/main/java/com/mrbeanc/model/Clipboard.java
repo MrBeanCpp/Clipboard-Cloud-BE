@@ -15,7 +15,7 @@ public class Clipboard {
     @Override
     public String toString() {
         String _data = isText ?
-                Utils.omit(data, 100) :
+                Utils.omit(data, 10) + "[Text Base64]" :
                 Utils.omit(data, 10) + "[Image Base64]";
 
         return "Clipboard{" +

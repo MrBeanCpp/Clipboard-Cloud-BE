@@ -12,6 +12,6 @@ public class ClipboardConfig {
     /** （全局）剪贴板数据存储Map: id -> Clipboard */
     @Bean
     public Map<String, Clipboard> clipboards() {
-        return new ConcurrentHashMap<>();
+        return new ConcurrentHashMap<>(); // key or value 不允许为null
     }
 }
