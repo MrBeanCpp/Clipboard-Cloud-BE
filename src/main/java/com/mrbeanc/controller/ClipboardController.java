@@ -3,10 +3,13 @@ package com.mrbeanc.controller;
 import com.mrbeanc.model.Clipboard;
 import com.mrbeanc.util.Utils;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,6 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 public class ClipboardController {
+    @Value("${clipboard.expire.minutes}")
+    private int EXPIRE_MINUTES;
+
     @Resource(name = "clipboards")
     private Map<String, Clipboard> clips;
     private final Map<String, DeferredResult<Clipboard>> waitlist = new ConcurrentHashMap<>();
@@ -82,7 +88,13 @@ public class ClipboardController {
             return v;
         });
 
-        return clipboard[0] == null ? new Clipboard() : clipboard[0];
+        Clipboard res = clipboard[0];
+        // 如果是过期的数据，返回空
+        if (res != null && Duration.between(res.getTime(), Instant.now()).toMinutes() >= EXPIRE_MINUTES) {
+            System.out.println("#Expired: " + Utils.omitSHA256(id) + " - " + res);
+            res = null;
+        }
+        return res == null ? new Clipboard() : res;
     }
 
     @PostMapping("/clipboard/{id}/{os}")

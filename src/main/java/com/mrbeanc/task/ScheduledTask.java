@@ -1,4 +1,4 @@
-package com.mrbeanc.tasks;
+package com.mrbeanc.task;
 
 import com.mrbeanc.model.Clipboard;
 import com.mrbeanc.util.Utils;
