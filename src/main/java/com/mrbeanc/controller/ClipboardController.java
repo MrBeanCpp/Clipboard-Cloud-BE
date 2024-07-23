@@ -108,7 +108,7 @@ public class ClipboardController {
             if (os.equals("ios")) { //仅IOS向Windows推送， IOS仅快捷指令手动Get
                 v.setResult(clipboard); //通知长轮询
                 isPushed.set(true);
-                System.out.println("Pushed to " + id);
+                System.out.println("Pushed to " + Utils.omitSHA256(id)); // 不能输出完整的id，防止泄露数据
             }
             return v;
         });
