@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--  <property name="LOG_HOME" value="./log" />-->
+    <!--从yml配置文件中读取键值-->
+    <springProperty scope="context" name="LOG_HOME" source="log.path" defaultValue="logs-default"/>
+    <!--格式化输出：%d表示日期，%thread表示线程名，%-5level：级别从左显示5个字符宽度%msg：日志消息，%n是换行符-->
+    <property name="PATTERN" value="%d{yy-MM-dd HH:mm:ss.SS} %p [%t] - %logger{0}:  %m%n"/>
+    <property name="PATTERN_COLOR"
+              value="%d{yy-MM-dd HH:mm:ss.SS} %highlight(%p) [%t] - %cyan(%logger{0}):  %m%n"/>
+    <!--高亮会输出多余字符，所以在FILE中不开启-->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${PATTERN_COLOR}</pattern>
+        </encoder>
+    </appender>
+
+    <!--文件日志， 按照每天生成日志文件，优先级高于yml文件中的logging.file.path-->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!--日志文件输出的文件名-->
+            <FileNamePattern>${LOG_HOME}/%d{yyyy-MM-dd}.log</FileNamePattern>
+            <!--日志文件保留天数-->
+            <MaxHistory>7</MaxHistory>
+        </rollingPolicy>
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>${PATTERN}</pattern>
+        </encoder>
+    </appender>
+
+    <!--ALL < TRACE < DEBUG < INFO < WARN < ERROR < OFF-->
+    <springProfile name="dev, default"><!-- dev环境不输出到文件 -->
+        <root level="info">
+            <appender-ref ref="STDOUT"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="prod"><!-- prod环境仅输出到文件 -->
+        <root level="info">
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+</configuration>

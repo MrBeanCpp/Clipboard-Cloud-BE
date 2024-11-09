@@ -3,6 +3,7 @@ package com.mrbeanc.controller;
 import com.mrbeanc.model.Clipboard;
 import com.mrbeanc.util.Utils;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
+@Slf4j
 public class ClipboardController {
     @Value("${clipboard.expire.minutes}")
     private int EXPIRE_MINUTES;
@@ -62,7 +64,7 @@ public class ClipboardController {
             waitlist.compute(id, (k, v) -> {
                 if (v != null) {
                     v.setErrorResult("肿么会同时发起多个长轮询！！不过有可能是客户端掉线or超时重连maybe");
-                    System.out.println("长江后浪推前浪！！");
+                    log.warn("长江后浪推前浪！！");
                     // 有可能是服务端重启，客户端单个long-polling自动重连，重新进入这个方法
                     // 但是，从客户端来看是一个请求之内，继续计时，超时时间为90s
                     // 从服务端来看，是从0开始计时，还没到60s，客户端就超过90s了，导致客户端主动abort，服务端不知道，继续等在waitlist中
@@ -91,7 +93,7 @@ public class ClipboardController {
         Clipboard res = clipboard[0];
         // 如果是过期的数据，返回空
         if (res != null && Duration.between(res.getTime(), Instant.now()).toMinutes() >= EXPIRE_MINUTES) {
-            System.out.println("#Expired: " + Utils.omitSHA256(id) + " - " + res);
+            log.info("#Expired: {} - {}", Utils.omitSHA256(id), res);
             res = null;
         }
         return res == null ? new Clipboard() : res;
@@ -108,7 +110,7 @@ public class ClipboardController {
             if (os.equals("ios")) { //仅IOS向Windows推送， IOS仅快捷指令手动Get
                 v.setResult(clipboard); //通知长轮询
                 isPushed.set(true);
-                System.out.println("Pushed to " + Utils.omitSHA256(id)); // 不能输出完整的id，防止泄露数据
+                log.info("Pushed to {}", Utils.omitSHA256(id)); // 不能输出完整的id，防止泄露数据
             }
             return v;
         });
@@ -116,7 +118,7 @@ public class ClipboardController {
         if (!isPushed.get())
             this.clips.put(id, clipboard); //仅当没有推送时，才保存到clipboards
 
-        System.out.println(Utils.omitSHA256(id) + ": " + clipboard);
+        log.info("{}: {}", Utils.omitSHA256(id), clipboard);
     }
 
     @GetMapping("/clipboard/status")
